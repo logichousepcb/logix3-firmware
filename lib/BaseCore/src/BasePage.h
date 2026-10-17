@@ -207,6 +207,13 @@ body[data-view=main] .settings-only,body[data-view=settings] .main-only{display:
 </section>
 
 <section class="card settings-only">
+  <h2>Hardware</h2>
+  <label class="chk" style="margin-top:0;font-size:14px;color:var(--fg)"><input type="checkbox" id="oldSwitchPattern"> Use old switch pattern</label>
+  <p class="hint">Turn on for controllers built on the old board, which wires LED 1 and LED 3 in reverse. Applies and saves immediately.</p>
+  <div class="msg" id="hwMsg"></div>
+</section>
+
+<section class="card settings-only">
   <h2>Hostname &amp; Security</h2>
   <form id="devForm">
     <label for="hostname">Hostname (reachable as <i>hostname</i>.local)</label>
@@ -528,6 +535,25 @@ $('devForm').onsubmit = async e => {
   } catch (err) { setMsg($('devMsg'), 'Request failed.', false); }
 };
 
+// Hardware options
+async function loadHardware() {
+  try {
+    const r = await fetch('/api/controller', {cache: 'no-store'});
+    if (r.ok) $('oldSwitchPattern').checked = !!(await r.json()).oldSwitchPattern;
+  } catch (e) {}
+}
+$('oldSwitchPattern').onchange = async e => {
+  const box = e.target;
+  box.disabled = true;
+  setMsg($('hwMsg'), 'Saving…');
+  try {
+    const j = await post('/api/controller', {oldSwitchPattern: box.checked ? 'true' : 'false'});
+    setMsg($('hwMsg'), j.ok ? (box.checked ? 'Old switch pattern on.' : 'Old switch pattern off.') : j.message, j.ok);
+    if (!j.ok) box.checked = !box.checked;
+  } catch (err) { box.checked = !box.checked; setMsg($('hwMsg'), 'Request failed.', false); }
+  box.disabled = false;
+};
+
 // Firmware upload
 $('fwForm').onsubmit = e => {
   e.preventDefault();
@@ -611,6 +637,7 @@ if (document.body.dataset.view === 'main') {
   setInterval(loadController, 250);
 } else {
   loadMqtt(true);
+  loadHardware();
   setInterval(() => loadMqtt(false), 5000);
 }
 loadStatus();

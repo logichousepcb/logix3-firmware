@@ -21,7 +21,8 @@ constexpr uint32_t kSaveDelayMs = 2000;         // coalesce flash writes (button
 
 constexpr char kSettingsPath[] = "/leds.bin";
 constexpr uint32_t kSettingsMagicV2 = 0x4C583302;  // "LX3" + layout version
-constexpr uint32_t kSettingsMagic = 0x4C583303;
+constexpr uint32_t kSettingsMagicV3 = 0x4C583303;
+constexpr uint32_t kSettingsMagic = 0x4C583304;
 
 struct Rgb {
   uint8_t red;
@@ -41,6 +42,16 @@ struct __attribute__((packed)) Settings {
   uint8_t brightness;
   LedConfig leds[kButtonCount];
   uint8_t mode[kButtonCount];  // 0 = off, 1-3 = press color, 4 = hold color
+  uint8_t oldSwitchPattern;    // 1 = old board wiring: LED 1 and LED 3 pixels swapped
+  uint32_t checksum;
+};
+
+// Layout written by firmware 1.2.0 (no old switch pattern option).
+struct __attribute__((packed)) SettingsV3 {
+  uint32_t magic;
+  uint8_t brightness;
+  LedConfig leds[kButtonCount];
+  uint8_t mode[kButtonCount];
   uint32_t checksum;
 };
 
@@ -82,6 +93,7 @@ const Settings kDefaultSettings = {
     },
     {0, 0, 0},
     0,
+    0,
 };
 
 Settings g_settings = kDefaultSettings;
@@ -110,13 +122,21 @@ void loadSettings() {
   }
 
   Settings loaded;
+  SettingsV3 v3;
   SettingsV2 old;
   if (SettingsFile::read(f, loaded, kSettingsMagic)) {
     for (uint8_t i = 0; i < kButtonCount; i++) {
       if (loaded.mode[i] > kColorModes) loaded.mode[i] = 0;
     }
+    loaded.oldSwitchPattern = loaded.oldSwitchPattern ? 1 : 0;
     g_settings = loaded;
     Serial.println("[leds] settings loaded");
+  } else if (SettingsFile::read(f, v3, kSettingsMagicV3)) {
+    // Same layout minus the old switch pattern option, which defaults to off.
+    g_settings.brightness = v3.brightness;
+    memcpy(g_settings.leds, v3.leds, sizeof(v3.leds));
+    for (uint8_t i = 0; i < kButtonCount; i++) g_settings.mode[i] = v3.mode[i] > kColorModes ? 0 : v3.mode[i];
+    Serial.println("[leds] migrated settings from previous layout");
   } else if (SettingsFile::read(f, old, kSettingsMagicV2)) {
     // Keep colors saved by the previous firmware; the hold color and LED state use defaults.
     g_settings.brightness = old.brightness;
@@ -207,6 +227,15 @@ bool parseMode(String value, uint8_t& mode) {
   return false;
 }
 
+bool parseBool(String value, bool& out) {
+  value.trim();
+  value.toLowerCase();
+  if (value == "1" || value == "true" || value == "on") out = true;
+  else if (value == "0" || value == "false" || value == "off") out = false;
+  else return false;
+  return true;
+}
+
 bool readButtonRaw(uint8_t index) {
   int level = digitalRead(kButtonPins[index]);
   return kButtonsActiveHigh ? level == HIGH : level == LOW;
@@ -216,7 +245,9 @@ void setPixel(uint8_t index) {
   const LedConfig& led = g_settings.leds[index];
   uint8_t mode = g_settings.mode[index];
   const Rgb& color = mode > 0 ? led.colors[mode - 1] : led.off;
-  g_strip.setPixelColor(index, Adafruit_NeoPixel::Color(color.red, color.green, color.blue));
+  // The old board chained the pixels in the opposite order, so LED 1 and LED 3 trade places.
+  uint8_t pixel = g_settings.oldSwitchPattern ? kButtonCount - 1 - index : index;
+  g_strip.setPixelColor(pixel, Adafruit_NeoPixel::Color(color.red, color.green, color.blue));
 }
 
 void applyAllLeds() {
@@ -318,7 +349,8 @@ void loop() {
 }
 
 // Every field is optional, so clients can change a single color or LED:
-//   ledNColor1-4 (single/double/triple/hold), ledNOffColor, ledNState, brightness.
+//   ledNColor1-4 (single/double/triple/hold), ledNOffColor, ledNState, brightness,
+//   oldSwitchPattern.
 bool update(const ArgLookup& arg, String& message) {
   Settings next = g_settings;
   uint8_t fields = 0;
@@ -356,6 +388,15 @@ bool update(const ArgLookup& arg, String& message) {
       message = "Brightness must be 0-255.";
       return false;
     }
+    fields++;
+  }
+  if (arg("oldSwitchPattern", value)) {
+    bool old;
+    if (!parseBool(value, old)) {
+      message = "oldSwitchPattern must be true or false.";
+      return false;
+    }
+    next.oldSwitchPattern = old ? 1 : 0;
     fields++;
   }
   if (fields == 0) {
@@ -436,6 +477,7 @@ String stateJson(bool live) {
     body += "],\"offColor\":\"" + colorToHex(led.off) + "\"}";
   }
   body += "],\"brightness\":" + String(g_settings.brightness) +
+          ",\"oldSwitchPattern\":" + (g_settings.oldSwitchPattern ? "true" : "false") +
           ",\"multiPressMs\":" + String(kMultiPressWindowMs) + ",\"holdMs\":" + String(kHoldMs) + "}";
   return body;
 }

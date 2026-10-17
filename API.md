@@ -21,7 +21,7 @@ The device advertises `_logix._tcp.local.` on port 80, with these TXT records:
 |---|---|---|
 | `model` | `logix3` | machine-readable model; stays the same across firmware versions |
 | `id` | `48e72971e527` | lowercase MAC without separators; stable unique ID |
-| `fw` | `1.2.0` | firmware version |
+| `fw` | `1.3.0` | firmware version |
 | `api` | `1` | API contract version; increases only on breaking changes |
 | `manufacturer` | `Logix` | |
 
@@ -35,7 +35,7 @@ This endpoint never requires a password, even when an admin password is set, so 
 {
   "manufacturer": "Logix", "model": "logix3", "name": "Logix 3",
   "id": "48e72971e527", "mac": "48:E7:29:71:E5:27", "hostname": "esp12f-e527", "ip": "192.168.22.235",
-  "fw": "1.2.0", "api": 1, "authRequired": false,
+  "fw": "1.3.0", "api": 1, "authRequired": false,
   "capabilities": {
     "buttons": 3, "leds": 3, "ledType": "rgb", "brightness": true,
     "actions": ["single", "double", "triple", "hold"],
@@ -80,6 +80,7 @@ Button and LED numbers are 1-3, top to bottom.
     {"mode": 2, "state": "double", "colors": ["#ff4040", "#ffa000", "#ffffff", "#8000ff"], "offColor": "#000000"}
   ],
   "brightness": 255,
+  "oldSwitchPattern": false,
   "multiPressMs": 400,
   "holdMs": 3000
 }
@@ -113,6 +114,7 @@ Every parameter is optional; send only the ones you want to change. Changes appl
 | `led1OffColor` … `led3OffColor` | off color |
 | `led1State` … `led3State` | `off`, `single`, `double`, `triple`, `hold` (or 0-4) |
 | `brightness` | 0-255, applies to all LEDs |
+| `oldSwitchPattern` | `true` / `false`: swap LED 1 and LED 3 for controllers built on the old board |
 
 Setting a state does not toggle: setting `led2State=double` on an LED that is already `double` leaves it on.
 

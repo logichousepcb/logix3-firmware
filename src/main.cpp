@@ -62,7 +62,7 @@ void setup() {
 
   BaseConfig cfg;
   cfg.title = "Logix 3";
-  cfg.fwVersion = "1.2.0";
+  cfg.fwVersion = "1.3.0";
   cfg.manufacturer = "Logix";
   cfg.model = "logix3";
   cfg.serviceType = "logix";
