@@ -134,3 +134,7 @@ API.md                HTTP and MQTT reference
 ```
 
 `lib/BaseCore` is model-independent. Other Logix devices can reuse it by setting `model`, `title` and `infoExtra` in `BaseConfig`.
+
+## License
+
+[MIT](LICENSE) © 2026 Michael Degenaars
